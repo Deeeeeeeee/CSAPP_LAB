@@ -1,5 +1,5 @@
 
-bomb:     file format elf64-x86-64
+bomb：     文件格式 elf64-x86-64
 
 SYMBOL TABLE:
 0000000000400238 l    d  .interp	0000000000000000              .interp
