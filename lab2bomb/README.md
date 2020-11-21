@@ -41,6 +41,9 @@ gdb bumb
 b func_name  给函数设置断点
 b *address 指定内存设置断点
 
+set 设置变量
+    直接修改内存 set {int}0x7fffffffddac = 0x137
+
 x/<n/f/u> <addr>
     n 是正整数，表示向后显示 n 个内存单位的内容。这个单位由 u 决定
     f 表示显示的格式。指定地址 i，字符串 s
@@ -62,3 +65,9 @@ clear 清除断点
 clear func_1 清除函数func_1里面的所有断点
 
 ```
+
+# 题解
+
+1. 第一个字符串是具体内存地址里的值
+2. 第二个是 for 循环
+3. 第三个是 switch
