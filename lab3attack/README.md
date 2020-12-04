@@ -76,6 +76,14 @@ $ ./ctarget -i FILE
 - hexraw 注意地址 hex 顺序
 - ./hex2raw < ctarget.l2.txt | ./ctarget -q
 
+## 生成指令字节码
+
+使用 gcc 和 objdump 工具
+
+```
+gcc -c 
+```
+
 ## ctarget
 
 code-injection
@@ -83,4 +91,8 @@ code-injection
 1. 不需要注入代码，只需要将返回地址指向到 touch1. 开辟了0x28 即 40 个字节的空间，把这部分填满再覆盖 return_address
 2. 需要注入少量代码，将返回地址指向 touch2. touch2 带了个参数，参数需要是 cookie，详细看 attacklab.pdf 的 4.2
   - 注入代码需要先将 return_address 指向注入代码的地址
-  - 注入的代码是已经编码好的指令
+  - 注入的代码是已经编码好的指令. 指令生成详见 attacklab.pdf 中的附录 B
+  - 步骤
+    - ret 到你代码的内存地址
+    - 将 cookie 传到 %rdi
+    - 设置 touch2 的内存地址到 %rsp，然后 ret
