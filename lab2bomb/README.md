@@ -33,6 +33,12 @@ next -> n   下一步不进入函数
 step -> s   下一步进入函数
 continue -> c   执行到下个断点
 list -> l   查看源码
+run -> r
+
+# 设置参数
+set args -q -i ctarget_l1.tmp
+# 查看参数
+show args
 ```
 
 ```
