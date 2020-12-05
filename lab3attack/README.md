@@ -81,7 +81,8 @@ $ ./ctarget -i FILE
 使用 gcc 和 objdump 工具
 
 ```
-gcc -c 
+gcc -c ctarget_l3.s
+objdump -d ctarget_l3.o
 ```
 
 ## ctarget
@@ -95,4 +96,43 @@ code-injection
   - 步骤
     - ret 到你代码的内存地址
     - 将 cookie 传到 %rdi
-    - 设置 touch2 的内存地址到 %rsp，然后 ret
+    - 设置 touch2 的内存地址到 (%rsp)，然后 ret
+3. 跟 touch2 很相似，但传给 touch3 的是 cookie 的字符串
+
+## rtarget
+
+return-oriented programming (ROP)
+
+### 题外话
+
+攻击 rtarget 更难，因为使用了两个技术
+- 使用了随机栈地址，使得注入的代码确定不了位置
+- 栈上的代码变成不可执行，所以即使找到了注入代码的位置，但也会 segmentation fault
+
+解决的办法是执行已存在的代码，而不是执行注入到栈上的指令。覆盖掉栈上的 return-address，让 %rsp 不停地 ret 到已存在的代码片段
+
+利用的方式
+```
+# C 代码
+void setval_210(unsigned *p) {
+    *p = 3347663060U;
+}
+
+# 汇编
+0000000000400f15 <setval_210>:
+    400f15: c7 07 d4 48 89 c7   movl $0xc78948d4,(%rdi)
+    400f1b: c3 retq
+
+# 因为 48 89 c7 是 movq %rax,%rdi
+# 所以在 0x400f18 地址上，执行的指令是 %rax,%rdi
+```
+
+1. 跟 ctarget 的 level2 需求一样。思路
+  - %rsp 上放跳转地址
+  - 找到片段 popq %rax. 后面可以跟 90，因为 90 是 nop, pc 指向下一个
+  - 找到片段 movq %rax %rdi. 后面可以跟 90，因为 90 是 nop
+2. 跟 ctarget 的 level3 需求一样。思路
+  - 首先获取到%rsp的地址，并且传送到%rdi
+  - 其二获取到字符串的偏移量值，并且传送到%rsi
+  - lea (%rdi,%rsi,1),%rax, 将字符串的首地址传送到%rax, 再传送到%rdi
+  - 调用touch3函数

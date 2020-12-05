@@ -34,6 +34,7 @@ step -> s   下一步进入函数
 continue -> c   执行到下个断点
 list -> l   查看源码
 run -> r
+delete -> d 删除断点
 
 # 设置参数
 set args -q -i ctarget_l1.tmp
@@ -46,6 +47,14 @@ gdb bumb
 
 b func_name  给函数设置断点
 b *address 指定内存设置断点
+
+info br 查看断点
+
+clear 清除断点
+clear func_1 清除函数func_1里面的所有断点
+clear *0x1234 清除指定内存的断电
+
+d 2 清除断点号2的断点
 
 set 设置变量
     直接修改内存 set {int}0x7fffffffddac = 0x137
@@ -66,10 +75,6 @@ x/<n/f/u> <addr>
     x/15i 0x400ee0 表示查看 0x400ee0 这个地址后面 15 个 4 字节的指令
     x/4s 0x402400 表示查看 0x402400 后面 4 个字符串
     x/20i $rip 查看当前要执行的指令
-
-clear 清除断点
-clear func_1 清除函数func_1里面的所有断点
-
 ```
 
 # 题解
