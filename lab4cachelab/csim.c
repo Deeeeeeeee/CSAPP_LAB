@@ -10,13 +10,14 @@ static bool verbose = false;
 /******** 队列begin *************/
 typedef int QElemType;
 typedef int Status;
+#define EVICTION 1
 
 typedef struct QNode {
     QElemType data; /* 数据 */
     struct QNode *next; /* 指针 */
 } QNode, *QueuePtr;;
 
-typedef struct {
+typedef struct LinkQueue {
     QueuePtr front;
     QueuePtr rear;
     int size;
@@ -57,24 +58,28 @@ Status enQueue(LinkQueue *Q, QElemType e) {
     Q->size += 1;
     // 超过容量删掉头部
     if (Q->size > Q->cap) {
-        QNode *q = Q->front;
+        QNode *q = Q->front->next;
         free(Q->front);
         Q->front = q;
-        return 1;
+        Q->size -= 1;
+        return EVICTION;
     } 
     return 0;
  }
 
 // 查找并移动到尾部
-Status loadQueue(LinkQueue *Q, QElemType e) {
+QElemType rmQueue(LinkQueue *Q, QElemType e) {
     QNode *cur = Q->front;
     while (cur) {
         QNode *q = cur->next;
-        if (q->data == e) {
+        if (cur->data == e) {
             // 删除当前节点
-            
-            // 入队到尾部
-            return enQueue(Q, e);
+            if (q) {
+                cur->data = q->data;
+                cur->next = q->next;
+                free(q);
+            }
+            return e;
         }
         cur = q;
     }
@@ -95,32 +100,17 @@ void calst(unsigned long long int addr, int S, int B, int *Set, int *Tag) {
 // 如果是 L，判断 Tag 是否相等，如果相等则 hit，如果 -1 则 miss，否则 miss+eviction
 // 如果是 S，判断 Tag，如果相等则 hit，如果 -1 则 miss，如果不是则 miss+eviction
 // 如果是 M，在 S 的基础上加 hit
-void calhme(int Set, int Tag, char action, int store[], unsigned int *hits, unsigned int *misses, unsigned int *evictions) {
-    if (action == 'L') {
-        if (store[Set] == Tag) *hits = *hits + 1; 
-        else if (store[Set] == -1) *misses = *misses + 1;
-        else {
-            *misses = *misses + 1;
-            *evictions = *evictions + 1;
-        }
-    } else if (action == 'S') {
-        if (store[Set] == Tag) *hits = *hits + 1;
-        else if (store[Set] == -1) *misses = *misses + 1;
-        else {
-            *misses = *misses + 1;
-            *evictions = *evictions + 1;
-        }
+void calhme(int Set, int Tag, char action, LinkQueue store[], unsigned int *hits, unsigned int *misses) {
+    int rmResult = rmQueue(&store[Set], Tag);
+    if (action == 'L' || action == 'S') {
+        if (rmResult == Tag) *hits = *hits + 1; 
+        else *misses = *misses + 1;
     } else {
-        if (store[Set] == Tag) *hits = *hits + 2;
-        else if (store[Set] == -1) {
+        if (rmResult == Tag) *hits = *hits + 2;
+        else {
             *misses = *misses + 1;
-            *hits = *hits + 1;
-        } else {
-            *misses = *misses + 1;
-            *evictions = *evictions + 1;
             *hits = *hits + 1;
         }
-
     }
 }
 
@@ -158,9 +148,11 @@ int main(int argc, char *argv[])
     int B = 1 << b;
 
     // 存储数据结构部分。使用 S 大小的数组，里面存 int 表示 tag，初始 tag 为 -1
-    int store[S];
+    struct LinkQueue store[S];
     for (int i = 0; i < S; i++) {
-        store[i] = -1;
+        struct LinkQueue Q;
+        initQueue(&Q, E);
+        store[i] = Q;
     }
 
     // 逐行读取数据
@@ -183,11 +175,17 @@ int main(int argc, char *argv[])
             // printf("%d,%d\n", Set, Tag);
 
             // 计算 hits, misses, evictions
-            calhme(Set, Tag, buf[1], store, &hits, &misses, &evictions);
-            store[Set] = Tag;
+            calhme(Set, Tag, buf[1], store, &hits, &misses);
+            int enResult = enQueue(&store[Set], Tag);
+            if (enResult == EVICTION) evictions += 1;
         }
     }
     fclose(full_trace_fp);
+
+    // 清除数据
+    for (int i = 0; i < S; i++) {
+        destroyQueue(&store[i]);
+    }
 
     // hit_count, miss_count, eviction_count 命中，未命中，驱逐
     printSummary(hits, misses, evictions);
