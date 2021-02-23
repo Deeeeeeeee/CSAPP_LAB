@@ -119,6 +119,24 @@ PartA 建议
   #include <unistd.h>
   ```
 
+```
+# PartB. 可以使用 test-traces 进行测试. 使用的是 s 5 E 1 b 5
+make
+./test-trans -M 32 -N 32
+
+# 可以注册很多个
+char trans_simple_desc[] = "A simple transpose";
+void trans_simple(int M, int N, int A[N][M], int B[M][N])
+{ /* your transpose code here */ }
+
+registerTransFunction(trans_simple, trans_simple_desc);
+```
+
+PartB 建议
+- test-trans 程序保存了 trace 到 trace.fi. 可以利用 PartA 部分的工具进行分析 `./csim-ref -v -s 5 -E 1 -b 5 -t trace.f0`
+- 因为使用的是 direct-mapped cache，即 E = 1。所以要考虑冲突导致的 miss
+- Blocking 是降低缓存 miss 一个很有用的技术. http://csapp.cs.cmu.edu/public/waside/waside-blocking.pdf
+
 # 作业思路
 
 ## PartA
