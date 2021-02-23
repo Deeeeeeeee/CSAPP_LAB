@@ -58,32 +58,34 @@ Status enQueue(LinkQueue *Q, QElemType e) {
     Q->size += 1;
     // 超过容量删掉头部
     if (Q->size > Q->cap) {
-        QNode *q = Q->front->next;
-        free(Q->front);
-        Q->front = q;
+        QueuePtr q = Q->front->next;
+        e = q->data;
+        Q->front->next = q->next;
+        if (Q->rear == q) Q->rear = Q->front; // 如果只剩一个元素，则为空队列
+        free(q);
         Q->size -= 1;
         return EVICTION;
     } 
     return 0;
  }
 
-// 查找并移动到尾部
+// 查找并删除
 QElemType rmQueue(LinkQueue *Q, QElemType e) {
-    QNode *cur = Q->front;
+    QueuePtr pre = Q->front;
+    QueuePtr cur = Q->front->next;
     while (cur) {
-        QNode *q = cur->next;
         if (cur->data == e) {
             // 删除当前节点
-            if (q) {
-                cur->data = q->data;
-                cur->next = q->next;
-                free(q);
-            }
+            pre->next = cur->next;
+            if (cur == Q->rear) Q->rear = pre; // 如果删的是最后一个元素，rear 往前移动
+            free(cur);
+            Q->size -= 1;
             return e;
         }
-        cur = q;
+        cur = cur->next;
+        pre = pre->next;
     }
-    return 0;
+    return -1;
 }
 
 /******** 队列end *************/
@@ -102,15 +104,16 @@ void calst(unsigned long long int addr, int S, int B, int *Set, int *Tag) {
 // 如果是 M，在 S 的基础上加 hit
 void calhme(int Set, int Tag, char action, LinkQueue store[], unsigned int *hits, unsigned int *misses) {
     int rmResult = rmQueue(&store[Set], Tag);
-    if (action == 'L' || action == 'S') {
-        if (rmResult == Tag) *hits = *hits + 1; 
-        else *misses = *misses + 1;
+    if (rmResult == Tag) {
+        *hits = *hits + 1;
+        if (verbose) printf(" hit");
     } else {
-        if (rmResult == Tag) *hits = *hits + 2;
-        else {
-            *misses = *misses + 1;
-            *hits = *hits + 1;
-        }
+        *misses = *misses + 1;
+        if (verbose) printf(" miss");
+    }
+    if (action == 'M') {
+        *hits = *hits + 1;
+        if (verbose) printf(" hit");
     }
 }
 
@@ -143,7 +146,7 @@ int main(int argc, char *argv[])
             exit(EXIT_FAILURE);
         }
     }
-    printf("params. s:%d E:%d b:%d t:%s\n", s, E, b, t);
+    // printf("params. s:%d E:%d b:%d t:%s\n", s, E, b, t);
     int S = 1 << s;
     int B = 1 << b;
 
@@ -168,7 +171,7 @@ int main(int argc, char *argv[])
             (buf[1]=='S' || buf[1]=='M' || buf[1]=='L' )) {
             // 读取 addr 和 len
             sscanf(buf+3, "%llx,%u", &addr, &len);
-            // printf("%llx,%u\n", addr, len);
+            if (verbose) printf("%c %llx,%u", buf[1], addr, len);
 
             // 计算 Set 和 Tag
             calst(addr, S, B, &Set, &Tag);
@@ -177,7 +180,11 @@ int main(int argc, char *argv[])
             // 计算 hits, misses, evictions
             calhme(Set, Tag, buf[1], store, &hits, &misses);
             int enResult = enQueue(&store[Set], Tag);
-            if (enResult == EVICTION) evictions += 1;
+            if (enResult == EVICTION) {
+                evictions += 1;
+                if (verbose) printf(" eviction");
+            }
+            printf("\n");
         }
     }
     fclose(full_trace_fp);
