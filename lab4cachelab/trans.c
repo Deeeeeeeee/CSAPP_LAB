@@ -22,6 +22,18 @@ int is_transpose(int M, int N, int A[N][M], int B[M][N]);
 char transpose_submit_desc[] = "Transpose submission";
 void transpose_submit(int M, int N, int A[N][M], int B[M][N])
 {
+    int i, j, tmp;
+    int i1, j1;
+    int SIZE = 8;
+
+    for (i = 0; i < N; i+=SIZE) {
+        for (j = 0; j < M; j+=SIZE)
+            for (i1 = i; i1 < i+SIZE && i1 < N; i1++)
+                for (j1 = j; j1 < j+SIZE && j1 < M; j1++) {
+                    tmp = A[i1][j1];
+                    B[j1][i1] = tmp;
+                }
+    }    
 }
 
 /* 
@@ -46,6 +58,24 @@ void trans(int M, int N, int A[N][M], int B[M][N])
 
 }
 
+
+char trans_test_desc[] = "Simple row-wise scan transpose";
+void trans_test(int M, int N, int A[N][M], int B[M][N])
+{
+    int i, j, tmp;
+    int i1, j1;
+    int SIZE = 5;
+
+    for (i = 0; i < N; i+=SIZE) {
+        for (j = 0; j < M; j+=SIZE)
+            for (i1 = i; i1 < i+SIZE && i1 < N; i1++)
+                for (j1 = j; j1 < j+SIZE && j1 < M; j1++) {
+                    tmp = A[i1][j1];
+                    B[j1][i1] = tmp;
+                }
+    }    
+}
+
 /*
  * registerFunctions - This function registers your transpose
  *     functions with the driver.  At runtime, the driver will
@@ -59,8 +89,9 @@ void registerFunctions()
     registerTransFunction(transpose_submit, transpose_submit_desc); 
 
     /* Register any additional transpose functions */
-    registerTransFunction(trans, trans_desc); 
+    // registerTransFunction(trans, trans_desc); 
 
+    registerTransFunction(trans_test, trans_test_desc); 
 }
 
 /* 
