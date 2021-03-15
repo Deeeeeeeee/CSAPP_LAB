@@ -41,6 +41,9 @@ void handler(int sig)
 }
 
 #define N 5
+// 这里有个问题，因为子进程有可能在父进程 addjob 前结束，而结束的时候会发信号 SIGCHLD 给父进程
+// 上下文切换到父进程的时候，会先执行 signal_handler，意味着可能先 deletejob
+// 然后父进程才 addjob，add 了一个已经结束的 job，从而产生 bug
 int main(int argc, char **argv)
 {
     int pid;
