@@ -85,6 +85,9 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+/* 这是我自己加的函数 */
+pid_t Fork(void);
+
 /*
  * main - The shell's main routine 
  */
@@ -165,7 +168,33 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
-    printf("%s", cmdline);
+    char *argv[MAXARGS]; /* Argument list execve() */
+    char buf[MAXLINE];   /* Holds modified command line */
+    int bg;              /* Should the job run in bg or fg? */
+    pid_t pid;           /* Process id */
+    
+    strcpy(buf, cmdline);
+    bg = parseline(buf, argv); 
+    if (argv[0] == NULL)  
+	    return;   /* Ignore empty lines */
+
+    if (!builtin_cmd(argv)) { 
+        if ((pid = Fork()) == 0) {   /* Child runs user job */
+            if (execve(argv[0], argv, environ) < 0) {
+                printf("%s: Command not found.\n", argv[0]);
+                exit(0);
+            }
+        }
+
+	/* Parent waits for foreground job to terminate */
+	if (!bg) {
+	    int status;
+	    if (waitpid(pid, &status, 0) < 0)
+		    unix_error("waitfg: waitpid error");
+	}
+	else
+	    printf("\[%d\] \(%d\) %s", jid, pid, cmdline);
+    }
     return;
 }
 
@@ -187,41 +216,41 @@ int parseline(const char *cmdline, char **argv)
     strcpy(buf, cmdline);
     buf[strlen(buf)-1] = ' ';  /* replace trailing '\n' with space */
     while (*buf && (*buf == ' ')) /* ignore leading spaces */
-	buf++;
+	    buf++;
 
     /* Build the argv list */
     argc = 0;
     if (*buf == '\'') {
-	buf++;
-	delim = strchr(buf, '\'');
+	    buf++;
+	    delim = strchr(buf, '\'');
     }
     else {
-	delim = strchr(buf, ' ');
+	    delim = strchr(buf, ' ');
     }
 
     while (delim) {
-	argv[argc++] = buf;
-	*delim = '\0';
-	buf = delim + 1;
-	while (*buf && (*buf == ' ')) /* ignore spaces */
-	       buf++;
+	    argv[argc++] = buf;
+	    *delim = '\0';
+	    buf = delim + 1;
+	    while (*buf && (*buf == ' ')) /* ignore spaces */
+	        buf++;
 
-	if (*buf == '\'') {
-	    buf++;
-	    delim = strchr(buf, '\'');
-	}
-	else {
-	    delim = strchr(buf, ' ');
-	}
+	    if (*buf == '\'') {
+	        buf++;
+	        delim = strchr(buf, '\'');
+	    }
+	    else {
+	        delim = strchr(buf, ' ');
+	    }
     }
     argv[argc] = NULL;
     
     if (argc == 0)  /* ignore blank line */
-	return 1;
+	    return 1;
 
     /* should the job run in the background? */
     if ((bg = (*argv[argc-1] == '&')) != 0) {
-	argv[--argc] = NULL;
+	    argv[--argc] = NULL;
     }
     return bg;
 }
@@ -232,6 +261,10 @@ int parseline(const char *cmdline, char **argv)
  */
 int builtin_cmd(char **argv) 
 {
+    char *cmd = argv[0];
+    if (strcmp(cmd, "quit") == 0) {
+        exit(0);
+    }
     return 0;     /* not a builtin command */
 }
 
@@ -507,5 +540,14 @@ void sigquit_handler(int sig)
     exit(1);
 }
 
+/* $begin forkwrapper */
+pid_t Fork(void) 
+{
+    pid_t pid;
 
+    if ((pid = fork()) < 0)
+	    unix_error("Fork error");
+    return pid;
+}
+/* $end forkwrapper */
 
