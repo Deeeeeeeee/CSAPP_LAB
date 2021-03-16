@@ -4,7 +4,7 @@ shellex: csapp.c csapp.h shellex.c sigint.c procmask1.c procmask2.c waitforsigna
 	gcc csapp.c forks.c -o forks -pthread
 	gcc csapp.c procmask1.c -o procmask1 -pthread
 	gcc csapp.c procmask2.c -o procmask2 -pthread
-	gcc csapp.c procmask2.c -o waitforsignal -pthread
+	gcc csapp.c waitforsignal.c -o waitforsignal -pthread
 
 run: shellex
 	./shellex

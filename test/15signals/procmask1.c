@@ -1,4 +1,5 @@
 #include "csapp.h"
+#include <unistd.h>
 
 static volatile long num_jobs;
 
@@ -58,12 +59,14 @@ int main(int argc, char **argv)
         if ((pid = Fork()) == 0) { /* Child process */
             Execve("/bin/date", argv, NULL);
         }
+        // sleep(1);
         // block 住所有的信号，保存之前的 blocked set
         Sigprocmask(SIG_BLOCK, &mask_all, &prev_all); /* Parent process */  
         addjob(pid);  /* Add the child to the job list */
         // 恢复原来的 blocked set
         Sigprocmask(SIG_SETMASK, &prev_all, NULL);    
     }
+    // while (1);
     exit(0);
 }
 /* $end procmask1 */

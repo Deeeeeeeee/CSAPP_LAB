@@ -333,10 +333,10 @@ void fork14()
     Signal(SIGCHLD, child_handler);
 
     for (i = 0; i < N; i++) {
-	if ((pid[i] = Fork()) == 0) {
-	    Sleep(1);
-	    exit(0);  /* Child exits */
-	}
+	    if ((pid[i] = Fork()) == 0) {
+	        Sleep(1);
+	        exit(0);  /* Child exits */
+	    }
     }
     while (ccount > 0) /* Parent spins */
 	;
@@ -345,17 +345,22 @@ void fork14()
 
 /*
  * child_handler2 - SIGCHLD handler that reaps all terminated children
+ * 虽然这里的信号数也是少于实际数的，但是把所有的子进程都 wait 到了
  */
 void child_handler2(int sig)
 {
+    int handle_n = 0;
     int olderrno = errno;
     pid_t pid;
     while ((pid = wait(NULL)) > 0) {
-	ccount--;
+        handle_n++;
+	    ccount--;
         Sio_puts("Handler reaped child ");
         Sio_putl((long)pid);
         Sio_puts(" \n");
     }
+    Sio_putl((long)handle_n);
+    Sio_puts(" \n");
     if (errno != ECHILD)
         Sio_error("wait error");
     errno = olderrno;
@@ -373,13 +378,12 @@ void fork15()
     Signal(SIGCHLD, child_handler2);
 
     for (i = 0; i < N; i++)
-	if ((pid[i] = Fork()) == 0) {
-	    Sleep(1);
-	    exit(0); /* Child exits */
-
-	}
+	    if ((pid[i] = Fork()) == 0) {
+            Sleep(1);
+	        exit(0); /* Child exits */
+	    }
     while (ccount > 0) { /* Parent spins */
-	;
+	    ;
     }
 }
 

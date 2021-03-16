@@ -101,18 +101,18 @@ int main(int argc, char **argv)
     /* Parse the command line */
     while ((c = getopt(argc, argv, "hvp")) != EOF) {
         switch (c) {
-        case 'h':             /* print help message */
+        case 'h': /* print help message */
             usage();
-	    break;
-        case 'v':             /* emit additional diagnostic info */
+            break;
+        case 'v': /* emit additional diagnostic info */
             verbose = 1;
-	    break;
-        case 'p':             /* don't print a prompt */
-            emit_prompt = 0;  /* handy for automatic testing */
-	    break;
-	default:
+            break;
+        case 'p':          /* don't print a prompt */
+            emit_prompt = 0; /* handy for automatic testing */
+            break;
+        default:
             usage();
-	}
+        }
     }
 
     /* Install the signal handlers */
@@ -131,22 +131,22 @@ int main(int argc, char **argv)
     /* Execute the shell's read/eval loop */
     while (1) {
 
-	/* Read command line */
-	if (emit_prompt) {
-	    printf("%s", prompt);
-	    fflush(stdout);
-	}
-	if ((fgets(cmdline, MAXLINE, stdin) == NULL) && ferror(stdin))
-	    app_error("fgets error");
-	if (feof(stdin)) { /* End of file (ctrl-d) */
-	    fflush(stdout);
-	    exit(0);
-	}
+	    /* Read command line */
+	    if (emit_prompt) {
+	        printf("%s", prompt);
+	        fflush(stdout);
+	    }
+	    if ((fgets(cmdline, MAXLINE, stdin) == NULL) && ferror(stdin))
+	        app_error("fgets error");
+	    if (feof(stdin)) { /* End of file (ctrl-d) */
+	        fflush(stdout);
+	        exit(0);
+	    }
 
-	/* Evaluate the command line */
-	eval(cmdline);
-	fflush(stdout);
-	fflush(stdout);
+	    /* Evaluate the command line */
+	    eval(cmdline);
+	    fflush(stdout);
+	    fflush(stdout);
     } 
 
     exit(0); /* control never reaches here */
@@ -165,6 +165,7 @@ int main(int argc, char **argv)
 */
 void eval(char *cmdline) 
 {
+    printf("%s", cmdline);
     return;
 }
 
@@ -330,18 +331,19 @@ int addjob(struct job_t *jobs, pid_t pid, int state, char *cmdline)
 	return 0;
 
     for (i = 0; i < MAXJOBS; i++) {
-	if (jobs[i].pid == 0) {
-	    jobs[i].pid = pid;
-	    jobs[i].state = state;
-	    jobs[i].jid = nextjid++;
-	    if (nextjid > MAXJOBS)
-		nextjid = 1;
-	    strcpy(jobs[i].cmdline, cmdline);
-  	    if(verbose){
-	        printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid, jobs[i].cmdline);
+	    if (jobs[i].pid == 0) {
+	        jobs[i].pid = pid;
+	        jobs[i].state = state;
+	        jobs[i].jid = nextjid++;
+	        if (nextjid > MAXJOBS)
+	    	    nextjid = 1;
+	        strcpy(jobs[i].cmdline, cmdline);
+            if (verbose) {
+                printf("Added job [%d] %d %s\n", jobs[i].jid, jobs[i].pid,
+                        jobs[i].cmdline);
             }
             return 1;
-	}
+        }
     }
     printf("Tried to create too many jobs\n");
     return 0;
@@ -356,11 +358,11 @@ int deletejob(struct job_t *jobs, pid_t pid)
 	return 0;
 
     for (i = 0; i < MAXJOBS; i++) {
-	if (jobs[i].pid == pid) {
-	    clearjob(&jobs[i]);
-	    nextjid = maxjid(jobs)+1;
-	    return 1;
-	}
+	    if (jobs[i].pid == pid) {
+	        clearjob(&jobs[i]);
+	        nextjid = maxjid(jobs)+1;
+	        return 1;
+	    }
     }
     return 0;
 }
@@ -370,8 +372,8 @@ pid_t fgpid(struct job_t *jobs) {
     int i;
 
     for (i = 0; i < MAXJOBS; i++)
-	if (jobs[i].state == FG)
-	    return jobs[i].pid;
+	    if (jobs[i].state == FG)
+	        return jobs[i].pid;
     return 0;
 }
 
@@ -382,8 +384,8 @@ struct job_t *getjobpid(struct job_t *jobs, pid_t pid) {
     if (pid < 1)
 	return NULL;
     for (i = 0; i < MAXJOBS; i++)
-	if (jobs[i].pid == pid)
-	    return &jobs[i];
+	    if (jobs[i].pid == pid)
+	        return &jobs[i];
     return NULL;
 }
 
@@ -395,8 +397,8 @@ struct job_t *getjobjid(struct job_t *jobs, int jid)
     if (jid < 1)
 	return NULL;
     for (i = 0; i < MAXJOBS; i++)
-	if (jobs[i].jid == jid)
-	    return &jobs[i];
+	    if (jobs[i].jid == jid)
+	        return &jobs[i];
     return NULL;
 }
 
@@ -408,7 +410,7 @@ int pid2jid(pid_t pid)
     if (pid < 1)
 	return 0;
     for (i = 0; i < MAXJOBS; i++)
-	if (jobs[i].pid == pid) {
+	    if (jobs[i].pid == pid) {
             return jobs[i].jid;
         }
     return 0;

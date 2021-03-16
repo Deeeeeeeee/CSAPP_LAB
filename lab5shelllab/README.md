@@ -72,4 +72,12 @@ tsh.c 中完成下面几个函数的功能，建议在 [n行] 完成
 
 # 作业要点
 - 阅读 csapp 第八章
-- 
+- 使用 trace files 来指导你的开发
+- 要是用 waitpid,kill,fork,execve,setpgid 和 sigprocmask. WUNTRACED 和 WNOHANG 两个 waitpid 参数会用到
+- 处理 signal handlers 时，确认发送 SIGINT 和 SIGSTP 信号到整个前台进程组，-[pid] 表示 kill 进程组. sdriver.pl 会测试这个
+- 有个棘手的事情，waitfg 和 sigchld_handler 函数分配 work 上的区别，推荐
+  - waitfg 使用 busy loop 和 sleep
+  - sigchld_handler 使用 waitpid
+- 在 eval 中，父进程必须在 forks 子进程前，使用 sigprocmask 去阻塞 SIGCHILD 信号，然后在 add child job 后使用 sigprocmask 去 unblock。另外因为子进程继承了父进程的 block 向量，所以也要 unblock
+- 因为 shell 在真实的 unix shell 执行，所以会在同一个进程组中，ctrl-c 的时候会发给进程组下的所有进程，避免这种情况，fork 后，execve 之前，使用 setpgid(0, 0) 来修改子进程的进程组
+

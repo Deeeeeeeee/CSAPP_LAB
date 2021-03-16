@@ -62,6 +62,7 @@ int main(int argc, char **argv)
         addjob(pid);  /* Add the child to the job list */
         Sigprocmask(SIG_SETMASK, &prev_one, NULL);  /* Unblock SIGCHLD */
     }
+    // while (1);
     exit(0);
 }
 /* $end procmask2 */
