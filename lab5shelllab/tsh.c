@@ -95,6 +95,8 @@ void Sigdelset(sigset_t *set, int signum);
 int Sigsuspend(const sigset_t *set);
 
 void Sio_error(char s[]);
+ssize_t Sio_puts(char s[]);
+ssize_t Sio_putl(long v);
 
 /*
  * main - The shell's main routine 
@@ -188,7 +190,7 @@ void eval(char *cmdline)
     
     strcpy(buf, cmdline);
     bg = parseline(buf, argv); 
-    state = bg == 1 ? BG : FG;
+    state = (bg == 1) ? BG : FG;
     if (argv[0] == NULL)  
 	    return;   /* Ignore empty lines */
 
@@ -207,16 +209,14 @@ void eval(char *cmdline)
 
 	    /* Parent waits for foreground job to terminate */
 	    if (!bg) {
-	        // int status;
-	        // if (waitpid(pid, &status, 0) < 0)
-	    	//     unix_error("waitfg: waitpid error");
+            waitfg(pid);
             // deletejob(jobs, pid); /* Delete the child from the job list */
-            while (!pid) {
-                Sigsuspend(&prev_one);
-            }
+            // while (!pid) {
+            //     Sigsuspend(&prev_one);
+            // }
 	    }
 	    else {
-	        printf("\[%d\] \(%d\) %s", pid2jid(pid), pid, cmdline);
+	        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
 	    }
     }
     return;
@@ -308,6 +308,20 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
+    sigset_t mask_one, prev_one;
+
+    Sigemptyset(&mask_one);
+    Sigaddset(&mask_one, SIGCHLD);
+
+    Sigprocmask(SIG_BLOCK, &mask_one, &prev_one); /* Block SIGCHLD */
+	// int status;
+	// if (waitpid(pid, &status, 0) < 0)
+	//     unix_error("waitfg: waitpid error");
+    while (pid == fgpid(jobs))
+        Sigsuspend(&prev_one);
+    Sigprocmask(SIG_SETMASK, &prev_one, NULL);  /* Unblock SIGCHLD */
+    if (verbose)
+        printf("waitfg: Process (%d) no longer the fg process\n", pid);
     return;
 }
 
@@ -324,19 +338,40 @@ void waitfg(pid_t pid)
  */
 void sigchld_handler(int sig) 
 {
+    if (verbose)
+        Sio_puts("sigchld_handler: entering\n");
+    int jid, status;
     int olderrno = errno;
     sigset_t mask_all, prev_all;
     pid_t pid;
 
     Sigfillset(&mask_all);
-    while ((pid = waitpid(-1, NULL, 0)) > 0) { /* Reap a zombie child */
+    while ((pid = waitpid(-1, &status, 0)) > 0) { /* Reap a zombie child */
         Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+        jid = pid2jid(pid);
+        if (verbose) {
+            Sio_puts("sigchld_handler: Job [");
+            Sio_putl(jid);
+            Sio_puts("] (");
+            Sio_putl(pid);
+            Sio_puts(") deleted\n");
+
+            Sio_puts("sigchld_handler: Job [");
+            Sio_putl(jid);
+            Sio_puts("] (");
+            Sio_putl(pid);
+            Sio_puts(") terminates OK ( status");
+            Sio_putl(status);
+            Sio_puts(")\n");
+        }
         deletejob(jobs, pid); /* Delete the child from the job list */
         Sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
     if (errno != ECHILD)
         Sio_error("waitpid error");
     errno = olderrno;
+    if (verbose)
+        Sio_puts("sigchld_handler: exiting\n");
     return;
 }
 
@@ -566,7 +601,7 @@ handler_t *Signal(int signum, handler_t *handler)
     action.sa_flags = SA_RESTART; /* restart syscalls if possible */
 
     if (sigaction(signum, &action, &old_action) < 0)
-	unix_error("Signal error");
+	    unix_error("Signal error");
     return (old_action.sa_handler);
 }
 
@@ -711,7 +746,7 @@ ssize_t Sio_putl(long v)
     ssize_t n;
   
     if ((n = sio_putl(v)) < 0)
-	sio_error("Sio_putl error");
+	    sio_error("Sio_putl error");
     return n;
 }
 
@@ -720,7 +755,7 @@ ssize_t Sio_puts(char s[])
     ssize_t n;
   
     if ((n = sio_puts(s)) < 0)
-	sio_error("Sio_puts error");
+	    sio_error("Sio_puts error");
     return n;
 }
 
