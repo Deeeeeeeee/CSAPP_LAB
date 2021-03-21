@@ -3,6 +3,7 @@
  * 
  * <Put your name and login ID here>
  */
+#include <bits/types/sigset_t.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -159,7 +160,6 @@ int main(int argc, char **argv)
 	    /* Evaluate the command line */
 	    eval(cmdline);
 	    fflush(stdout);
-	    fflush(stdout);
     } 
 
     exit(0); /* control never reaches here */
@@ -184,10 +184,6 @@ void eval(char *cmdline)
     pid_t pid;           /* Process id */
     sigset_t mask_all, mask_one, prev_one;
 
-    Sigfillset(&mask_all);
-    Sigemptyset(&mask_one);
-    Sigaddset(&mask_one, SIGCHLD);
-    
     strcpy(buf, cmdline);
     bg = parseline(buf, argv); 
     state = (bg == 1) ? BG : FG;
@@ -195,25 +191,28 @@ void eval(char *cmdline)
 	    return;   /* Ignore empty lines */
 
     if (!builtin_cmd(argv)) { 
+        Sigfillset(&mask_all);
+        Sigemptyset(&mask_one);
+        Sigaddset(&mask_one, SIGCHLD);
+    
         Sigprocmask(SIG_BLOCK, &mask_one, &prev_one); /* Block SIGCHLD */
         if ((pid = Fork()) == 0) {   /* Child runs user job */
             Sigprocmask(SIG_SETMASK, &prev_one, NULL); /* Unblock SIGCHLD */
+            setpgid(0, 0); // 将子进程放入新的进程组，防止与 shell 进程组冲突
             if (execve(argv[0], argv, environ) < 0) {
                 printf("%s: Command not found.\n", argv[0]);
                 exit(0);
             }
+            fflush(stdout);
+            exit(0);
         }
         Sigprocmask(SIG_BLOCK, &mask_all, NULL); /* Parent process */  
-        addjob(jobs, pid, state, cmdline); /* Add the child to the job list */
+        addjob(jobs, pid, state, buf); /* Add the child to the job list */
         Sigprocmask(SIG_SETMASK, &prev_one, NULL);  /* Unblock SIGCHLD */
 
 	    /* Parent waits for foreground job to terminate */
 	    if (!bg) {
             waitfg(pid);
-            // deletejob(jobs, pid); /* Delete the child from the job list */
-            // while (!pid) {
-            //     Sigsuspend(&prev_one);
-            // }
 	    }
 	    else {
 	        printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
@@ -288,10 +287,18 @@ int builtin_cmd(char **argv)
     char *cmd = argv[0];
     if (strcmp(cmd, "quit") == 0) {
         exit(0);
-    } else if (strcmp(cmd, "jobs") == 0) {
-        listjobs(jobs);
+    } else if (strcmp(cmd, "bg") == 0 || strcmp(cmd, "fg") == 0) {
+        do_bgfg(argv);
         return 1;
-    }
+    } else if (strcmp(cmd, "jobs") == 0) {
+        sigset_t mask_all, prev_all;
+        Sigfillset(&mask_all);
+        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all); /* 阻塞 */  
+        listjobs(jobs);
+        Sigprocmask(SIG_SETMASK, &prev_all, NULL); /* 解除阻塞 */  
+        return 1;
+    } else if (!strcmp(argv[0], "&"))    /* Ignore singleton & */
+	    return 1;
     return 0;     /* not a builtin command */
 }
 
@@ -300,6 +307,55 @@ int builtin_cmd(char **argv)
  */
 void do_bgfg(char **argv) 
 {
+    char *end_ptr;
+    char *cmd = argv[0], *id_str = argv[1];
+    int job_arg = 0;
+    struct job_t *job;
+
+    sigset_t mask_all, prev_all;
+    Sigfillset(&mask_all);
+
+    // 判断参数个数
+    if (id_str == NULL) {
+        printf("%s command requires PID or %%jobid argument\n", cmd);
+        return;
+    }
+    if (id_str[0] == '%') {
+        id_str += 1;
+        job_arg = 1;
+    }
+    // 判断参数是否数字
+    if (strspn(id_str, "0123456789") != strlen(id_str)) {
+        printf("%s: argument must be a PID or %%jobid\n", cmd);
+        return;
+    }
+    // 判断 jobs 里面是否有目标job 
+    int id = strtol(id_str, &end_ptr, 0);
+    job = job_arg == 1 ? getjobjid(jobs, id) : getjobpid(jobs, id);
+    if (job == NULL) {
+        if (job_arg == 1) printf("%%%d: No such job\n", id);
+        else printf("(%d): No such process\n", id);
+        return;
+    }
+
+    if (strcmp(cmd, "bg") == 0) {
+        // 不是 ST 状态不处理
+        if (job->state != ST)
+            return;
+        job->state = BG;
+        kill(job->pid, SIGCONT);
+	    printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
+    } else {
+        if (job->state == FG)
+            return;
+        Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
+        // ST 状态需要唤醒
+        if  (job->state == ST)
+            kill(-job->pid, SIGCONT);
+        job->state = FG;
+        Sigprocmask(SIG_SETMASK, &prev_all, NULL);
+        waitfg(job->pid);
+    }
     return;
 }
 
@@ -314,9 +370,7 @@ void waitfg(pid_t pid)
     Sigaddset(&mask_one, SIGCHLD);
 
     Sigprocmask(SIG_BLOCK, &mask_one, &prev_one); /* Block SIGCHLD */
-	// int status;
-	// if (waitpid(pid, &status, 0) < 0)
-	//     unix_error("waitfg: waitpid error");
+
     while (pid == fgpid(jobs))
         Sigsuspend(&prev_one);
     Sigprocmask(SIG_SETMASK, &prev_one, NULL);  /* Unblock SIGCHLD */
@@ -346,9 +400,31 @@ void sigchld_handler(int sig)
     pid_t pid;
 
     Sigfillset(&mask_all);
-    while ((pid = waitpid(-1, &status, 0)) > 0) { /* Reap a zombie child */
+    while ((pid = waitpid(-1, &status, WNOHANG|WUNTRACED)) > 0) {
         Sigprocmask(SIG_BLOCK, &mask_all, &prev_all);
         jid = pid2jid(pid);
+        if (WIFSIGNALED(status)) {
+            deletejob(jobs, pid); /* Delete the child from the job list */
+            Sio_puts("Job [");
+            Sio_putl(jid);
+            Sio_puts("] (");
+            Sio_putl(pid);
+            Sio_puts(") terminated by signal ");
+            Sio_putl(WTERMSIG(status));
+            Sio_puts("\n");
+        } else if (WIFEXITED(status)) {
+            deletejob(jobs, pid); /* Delete the child from the job list */
+        } else {
+            struct job_t *fgjob = getjobpid(jobs, pid);
+            fgjob->state = ST;
+            Sio_puts("Job [");
+            Sio_putl(jid);
+            Sio_puts("] (");
+            Sio_putl(pid);
+            Sio_puts(") stopped by signal ");
+            Sio_putl(WSTOPSIG(status));
+            Sio_puts("\n");
+        }
         if (verbose) {
             Sio_puts("sigchld_handler: Job [");
             Sio_putl(jid);
@@ -360,15 +436,14 @@ void sigchld_handler(int sig)
             Sio_putl(jid);
             Sio_puts("] (");
             Sio_putl(pid);
-            Sio_puts(") terminates OK ( status");
+            Sio_puts(") terminates OK (status ");
             Sio_putl(status);
             Sio_puts(")\n");
         }
-        deletejob(jobs, pid); /* Delete the child from the job list */
         Sigprocmask(SIG_SETMASK, &prev_all, NULL);
     }
-    if (errno != ECHILD)
-        Sio_error("waitpid error");
+    // if (errno != ECHILD)
+    //     Sio_error("waitpid error");
     errno = olderrno;
     if (verbose)
         Sio_puts("sigchld_handler: exiting\n");
@@ -382,6 +457,12 @@ void sigchld_handler(int sig)
  */
 void sigint_handler(int sig) 
 {
+    int olderrno = errno;
+    pid_t pid = fgpid(jobs);
+    if (pid == 0) // 没有 fg 进程
+        return;
+    kill(-pid, SIGINT);
+    errno = olderrno;
     return;
 }
 
@@ -392,6 +473,12 @@ void sigint_handler(int sig)
  */
 void sigtstp_handler(int sig) 
 {
+    int olderrno = errno;
+    pid_t pid = fgpid(jobs);
+    if (pid == 0) // 没有 fg 进程
+        return;
+    kill(-pid, SIGTSTP);
+    errno = olderrno;
     return;
 }
 
@@ -530,24 +617,24 @@ void listjobs(struct job_t *jobs)
     int i;
     
     for (i = 0; i < MAXJOBS; i++) {
-	if (jobs[i].pid != 0) {
-	    printf("[%d] (%d) ", jobs[i].jid, jobs[i].pid);
-	    switch (jobs[i].state) {
-		case BG: 
-		    printf("Running ");
-		    break;
-		case FG: 
-		    printf("Foreground ");
-		    break;
-		case ST: 
-		    printf("Stopped ");
-		    break;
-	    default:
-		    printf("listjobs: Internal error: job[%d].state=%d ", 
-			   i, jobs[i].state);
+	    if (jobs[i].pid != 0) {
+	        printf("[%d] (%d) ", jobs[i].jid, jobs[i].pid);
+	        switch (jobs[i].state) {
+	    	case BG: 
+	    	    printf("Running ");
+	    	    break;
+	    	case FG: 
+	    	    printf("Foreground ");
+	    	    break;
+	    	case ST: 
+	    	    printf("Stopped ");
+	    	    break;
+	        default:
+	    	    printf("listjobs: Internal error: job[%d].state=%d ", 
+	    		   i, jobs[i].state);
+	        }
+	        printf("%s", jobs[i].cmdline);
 	    }
-	    printf("%s", jobs[i].cmdline);
-	}
     }
 }
 /******************************
@@ -608,35 +695,35 @@ handler_t *Signal(int signum, handler_t *handler)
 void Sigprocmask(int how, const sigset_t *set, sigset_t *oldset)
 {
     if (sigprocmask(how, set, oldset) < 0)
-	unix_error("Sigprocmask error");
+	    unix_error("Sigprocmask error");
     return;
 }
 
 void Sigemptyset(sigset_t *set)
 {
     if (sigemptyset(set) < 0)
-	unix_error("Sigemptyset error");
+	    unix_error("Sigemptyset error");
     return;
 }
 
 void Sigfillset(sigset_t *set)
 { 
     if (sigfillset(set) < 0)
-	unix_error("Sigfillset error");
+	    unix_error("Sigfillset error");
     return;
 }
 
 void Sigaddset(sigset_t *set, int signum)
 {
     if (sigaddset(set, signum) < 0)
-	unix_error("Sigaddset error");
+	    unix_error("Sigaddset error");
     return;
 }
 
 void Sigdelset(sigset_t *set, int signum)
 {
     if (sigdelset(set, signum) < 0)
-	unix_error("Sigdelset error");
+	    unix_error("Sigdelset error");
     return;
 }
 
