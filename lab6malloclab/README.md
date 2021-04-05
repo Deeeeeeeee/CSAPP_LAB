@@ -79,3 +79,28 @@ To get a list of the driver flags:
 - 分配的 block 是否有重叠
 - heap block 指针是否指向有效的 heap 地址
 
+# mdriver.c 测试用
+
+- -t <tracedir> 修改 config.h 里面的 tracefile 路径
+- -f <tracefile> 使用具体的一个文件来测试
+- -h 输出命令行参数的介绍
+- -l
+- -v 输出更多的信息。将表现分解输出到一个表中
+- -V 输出更多更多的信息。输出额外的诊断信息，当 malloc 失败的时候，可以用来找出哪个 trace file 导致失败
+
+# 一些规则
+
+- 不能调用内存分配的系统调用。如 malloc,free,sbrk 等
+- 不能用全局数据结构，array,tree,struct 等，但是可以使用全局的 int,float等
+- 8 bytes 对齐
+
+# 建议
+
+- 使用 mdriver -f 选项。short1,2-bal.rep 刚开始的时候，使用少量的 trace file 进行调试和测试
+- 使用 -v 和 -V 选项。-v 会总结 trace file 细节，-V 帮助解决 error
+- 使用 gcc -g 和 debugger. 方便调试找出错误
+- 理解书中的实现。书中的实现是隐式列表分配器
+- 使用宏来简化指针操作，参考书中的例子
+- 分阶段来实现，先实现 malloc 和 free，使用前 9 个 trace file
+- 使用 profiler. gprof 工具很有帮助
+
