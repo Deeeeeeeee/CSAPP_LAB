@@ -104,3 +104,8 @@ To get a list of the driver flags:
 - 分阶段来实现，先实现 malloc 和 free，使用前 9 个 trace file
 - 使用 profiler. gprof 工具很有帮助
 
+# 显式free list实现思路
+
+
+
+
