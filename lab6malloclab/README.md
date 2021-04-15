@@ -102,7 +102,7 @@ To get a list of the driver flags:
 - 理解书中的实现。书中的实现是隐式列表分配器
 - 使用宏来简化指针操作，参考书中的例子
 - 分阶段来实现，先实现 malloc 和 free，使用前 9 个 trace file
-- 使用 profiler. gprof 工具很有帮助
+- 使用 profiler. 比如 gprof 工具可以帮助优化性能
 
 # 显式free list实现思路
 

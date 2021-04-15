@@ -9,7 +9,6 @@
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
  */
-#include <cstddef>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -59,7 +58,7 @@ team_t team = {
 
 /* 读取 size 和 是否分配字段 */
 #define GET_SIZE(p)     (GET(p) & ~0x7)
-#define GET_ALLOC(args) (GET(p) & 0x1)
+#define GET_ALLOC(p) (GET(p) & 0x1)
 
 /* 计算 header 和 footer */
 #define HDRP(bp) ((char *)(bp) - WSIZE)
@@ -73,6 +72,10 @@ team_t team = {
 static char *heap_listp;
 
 /** 私有函数 */
+static void *extend_heap(size_t words);
+static void *coalesce(void *bp);
+static void *find_fit(size_t asize);
+static void place(void *bp, size_t asize);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -89,7 +92,8 @@ int mm_init(void)
     heap_listp += (2*WSIZE);
 
     /** 初始化 CHUNKSIZE 个块 */
-    if (exte)
+    if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
+        return -1;
     return 0;
 }
 
@@ -99,21 +103,44 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
-	    return NULL;
-    else {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+    size_t asize;       // 调整 block 大小
+    size_t extendsize;  // 如果没找到合适的，扩展堆
+    char *bp;
+
+    /** 忽略无效请求 */
+    if (size == 0)
+        return NULL;
+
+    /** 调整最小块和对齐 */
+    if (size <= DSIZE)
+        asize = 2*DSIZE;
+    else
+        asize = ALIGN(size);
+
+    /** 搜索合适的空闲块 */
+    if ((bp = find_fit(asize)) != NULL) {
+        place(bp, asize);   // 分割
+        return bp;
     }
+
+    /** 没找到合适的，申请更多的空间 */
+    extendsize = MAX(asize, CHUNKSIZE);
+    if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
+        return NULL;
+    place(bp, asize);   // 分割
+    return bp;
 }
 
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr)
+void mm_free(void *bp)
 {
+    size_t size = GET_SIZE(HDRP(bp));
+
+    PUT(HDRP(bp), PACK(size, 0));   // 首尾置成未分配
+    PUT(FTRP(bp), PACK(size, 0));
+    coalesce(bp);
 }
 
 /*
@@ -154,5 +181,69 @@ static void *extend_heap(size_t words)
 
     /** 合并 */
     return coalesce(bp);
+}
+
+/** 合并操作 */
+static void *coalesce(void *bp)
+{
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));     // 前一个 footer 中是否分配
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));     // 后一个 header 中是否分配
+    size_t size = GET_SIZE(HDRP(bp));                       // 当前 block 大小
+
+    if (prev_alloc && next_alloc) {                         // Case 1. 前后都分配了
+        return bp;
+    }
+
+    else if (prev_alloc && !next_alloc) {                   // Case 2. 后面未分配
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        PUT(HDRP(bp), PACK(size, 0));   // 先给 header 写 size，下一步 FTRP 会用到
+        PUT(FTRP(bp), PACK(size, 0));
+    }
+
+    else if (!prev_alloc && next_alloc) {                   // Case 3. 前面未分配
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+        PUT(FTRP(bp), PACK(size, 0));                       // 先给 footer 写 size
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));            // 给前一个 block 的 header 写 size
+        bp = PREV_BLKP(bp);                                 // 修改 bp 为前一个 block 的 bp
+    }
+
+    else {                                                  // Case 4. 前后都未分配
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
+            GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+    }
+    return bp;
+}
+
+/** 搜索操作 */
+static void *find_fit(size_t asize)
+{
+    void *bp;
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) != 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (GET_SIZE(HDRP(bp)) >= asize))
+            return bp;
+    }
+    return NULL;    // 没找合适的
+}
+
+/** 分割操作 */
+static void place(void *bp, size_t asize)
+{
+    size_t csize = GET_SIZE(HDRP(bp));
+
+    if ((csize - asize) >= (2*DSIZE)) {
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp), PACK(csize - asize, 0));
+        PUT(FTRP(bp), PACK(csize - asize, 0));
+    }
+    else {
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
 }
 
