@@ -98,8 +98,7 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc
  */
 void *mm_malloc(size_t size)
 {
@@ -132,7 +131,7 @@ void *mm_malloc(size_t size)
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free
  */
 void mm_free(void *bp)
 {
@@ -144,7 +143,7 @@ void mm_free(void *bp)
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc
  */
 void *mm_realloc(void *ptr, size_t size)
 {

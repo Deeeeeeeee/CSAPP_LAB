@@ -98,8 +98,7 @@ int mm_init(void)
 }
 
 /* 
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
+ * mm_malloc
  */
 void *mm_malloc(size_t size)
 {
@@ -115,11 +114,11 @@ void *mm_malloc(size_t size)
     if (size <= DSIZE)
         asize = 2*DSIZE;
     else
-        asize = ALIGN(size);
+        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
 
     /** 搜索合适的空闲块 */
     if ((bp = find_fit(asize)) != NULL) {
-        place(bp, asize);   // 分割
+        place(bp, asize);   // 分割&设置已分配
         return bp;
     }
 
@@ -127,12 +126,12 @@ void *mm_malloc(size_t size)
     extendsize = MAX(asize, CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
         return NULL;
-    place(bp, asize);   // 分割
+    place(bp, asize);   // 分割&设置已分配
     return bp;
 }
 
 /*
- * mm_free - Freeing a block does nothing.
+ * mm_free
  */
 void mm_free(void *bp)
 {
@@ -144,7 +143,7 @@ void mm_free(void *bp)
 }
 
 /*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
+ * mm_realloc
  */
 void *mm_realloc(void *ptr, size_t size)
 {
@@ -170,7 +169,7 @@ static void *extend_heap(size_t words)
     size_t size;
 
     /** 双字对齐 */
-    size = ALIGN(words);
+    size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;
     if ((long)(bp = mem_sbrk(size)) == -1)
         return NULL;
 
@@ -196,7 +195,7 @@ static void *coalesce(void *bp)
 
     else if (prev_alloc && !next_alloc) {                   // Case 2. 后面未分配
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        PUT(HDRP(bp), PACK(size, 0));   // 先给 header 写 size，下一步 FTRP 会用到
+        PUT(HDRP(bp), PACK(size, 0));                       // 先给 header 写 size，下一步 FTRP 会用到
         PUT(FTRP(bp), PACK(size, 0));
     }
 
@@ -229,7 +228,7 @@ static void *find_fit(size_t asize)
     return NULL;    // 没找合适的
 }
 
-/** 分割操作 */
+/** 分割&设置已分配操作 */
 static void place(void *bp, size_t asize)
 {
     size_t csize = GET_SIZE(HDRP(bp));

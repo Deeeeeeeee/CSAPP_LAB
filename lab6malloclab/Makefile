@@ -7,8 +7,8 @@ HANDINDIR = /afs/cs.cmu.edu/academic/class/15213-f01/malloclab/handin
 
 CC = gcc
 # CFLAGS = -Wall -O2 -m32
-# CFLAGS = -Wall -O2 -g -m32 -g3 -gdwarf-2
-CFLAGS = -Wall -O2 -g -g3 -gdwarf-2
+CFLAGS = -Wall -O2 -g -m32 -g3 -gdwarf-2 -ggdb
+# CFLAGS = -Wall -O2 -g -g3 -gdwarf-2 -ggdb
 
 OBJS = mdriver.o mm.o memlib.o fsecs.o fcyc.o clock.o ftimer.o
 
