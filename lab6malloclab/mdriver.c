@@ -590,92 +590,93 @@ static int eval_mm_valid(trace_t *trace, int tracenum, range_t **ranges)
 
     /* Call the mm package's init function */
     if (mm_init() < 0) {
-	malloc_error(tracenum, 0, "mm_init failed.");
-	return 0;
+	    malloc_error(tracenum, 0, "mm_init failed.");
+	    return 0;
     }
 
     /* Interpret each operation in the trace in order */
     for (i = 0;  i < trace->num_ops;  i++) {
-	index = trace->ops[i].index;
-	size = trace->ops[i].size;
+	    index = trace->ops[i].index;
+	    size = trace->ops[i].size;
 
         switch (trace->ops[i].type) {
 
         case ALLOC: /* mm_malloc */
 
-	    /* Call the student's malloc */
-	    if ((p = mm_malloc(size)) == NULL) {
-		malloc_error(tracenum, i, "mm_malloc failed.");
-		return 0;
-	    }
-	    
-	    /* 
-	     * Test the range of the new block for correctness and add it 
-	     * to the range list if OK. The block must be  be aligned properly,
-	     * and must not overlap any currently allocated block. 
-	     */ 
-	    if (add_range(ranges, p, size, tracenum, i) == 0)
-		return 0;
-	    
-	    /* ADDED: cgw
-	     * fill range with low byte of index.  This will be used later
-	     * if we realloc the block and wish to make sure that the old
-	     * data was copied to the new block
-	     */
-	    memset(p, index & 0xFF, size);
+	        /* Call the student's malloc */
+	        if ((p = mm_malloc(size)) == NULL) {
+		        malloc_error(tracenum, i, "mm_malloc failed.");
+		        return 0;
+	        }
+	        
+	        /* 
+	         * Test the range of the new block for correctness and add it 
+	         * to the range list if OK. The block must be  be aligned properly,
+	         * and must not overlap any currently allocated block. 
+	         */ 
+	        if (add_range(ranges, p, size, tracenum, i) == 0)
+		        return 0;
+	        
+	        /* ADDED: cgw
+	         * fill range with low byte of index.  This will be used later
+	         * if we realloc the block and wish to make sure that the old
+	         * data was copied to the new block
+	         */
+	        memset(p, index & 0xFF, size);
 
-	    /* Remember region */
-	    trace->blocks[index] = p;
-	    trace->block_sizes[index] = size;
-	    break;
+	        /* Remember region */
+	        trace->blocks[index] = p;
+	        trace->block_sizes[index] = size;
+	        break;
 
         case REALLOC: /* mm_realloc */
 	    
-	    /* Call the student's realloc */
-	    oldp = trace->blocks[index];
-	    if ((newp = mm_realloc(oldp, size)) == NULL) {
-		malloc_error(tracenum, i, "mm_realloc failed.");
-		return 0;
-	    }
-	    
-	    /* Remove the old region from the range list */
-	    remove_range(ranges, oldp);
-	    
-	    /* Check new block for correctness and add it to range list */
-	    if (add_range(ranges, newp, size, tracenum, i) == 0)
-		return 0;
-	    
-	    /* ADDED: cgw
-	     * Make sure that the new block contains the data from the old 
-	     * block and then fill in the new block with the low order byte
-	     * of the new index
-	     */
-	    oldsize = trace->block_sizes[index];
-	    if (size < oldsize) oldsize = size;
-	    for (j = 0; j < oldsize; j++) {
-	      if (newp[j] != (index & 0xFF)) {
-		malloc_error(tracenum, i, "mm_realloc did not preserve the "
-			     "data from old block");
-		return 0;
-	      }
-	    }
-	    memset(newp, index & 0xFF, size);
+	        /* Call the student's realloc */
+	        oldp = trace->blocks[index];
+	        if ((newp = mm_realloc(oldp, size)) == NULL) {
+		        malloc_error(tracenum, i, "mm_realloc failed.");
+		        return 0;
+	        }
+	        
+	        /* Remove the old region from the range list */
+	        remove_range(ranges, oldp);
+	        
+	        /* Check new block for correctness and add it to range list */
+	        if (add_range(ranges, newp, size, tracenum, i) == 0)
+		        return 0;
+	        
+	        /* ADDED: cgw
+	         * Make sure that the new block contains the data from the old 
+	         * block and then fill in the new block with the low order byte
+	         * of the new index
+	         */
+	        oldsize = trace->block_sizes[index];
+	        if (size < oldsize) oldsize = size;
+	        for (j = 0; j < oldsize; j++) {
+                if (newp[j] != (index & 0xFF)) {
+                    malloc_error(tracenum, i,
+                                 "mm_realloc did not preserve the "
+                                 "data from old block");
+                    return 0;
+                }
+            }
+	        memset(newp, index & 0xFF, size);
 
-	    /* Remember region */
-	    trace->blocks[index] = newp;
-	    trace->block_sizes[index] = size;
-	    break;
+	        /* Remember region */
+	        trace->blocks[index] = newp;
+	        trace->block_sizes[index] = size;
+	        break;
 
         case FREE: /* mm_free */
 	    
-	    /* Remove region from list and call student's free function */
-	    p = trace->blocks[index];
-	    remove_range(ranges, p);
-	    mm_free(p);
-	    break;
+	        /* Remove region from list and call student's free function */
+	        p = trace->blocks[index];
+	        remove_range(ranges, p);
+	        mm_free(p);
+	        break;
 
-	default:
-	    app_error("Nonexistent request type in eval_mm_valid");
+	    default:
+	        app_error("Nonexistent request type in eval_mm_valid");
         }
 
     }

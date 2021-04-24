@@ -147,40 +147,19 @@ void mm_free(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    size_t asize, ptr_size;
-    void *new_bp;
-
-    if (ptr == NULL)
-        return mm_malloc(size);
-    if (size == 0) {
-        mm_free(ptr);
+    void *oldptr = ptr;
+    void *newptr;
+    size_t copySize;
+    
+    newptr = mm_malloc(size);
+    if (newptr == NULL)
         return NULL;
-    }
-
-    if (size <= DSIZE)
-        asize = 2*DSIZE;
-    else
-        asize = DSIZE * ((size + (DSIZE) + (DSIZE - 1)) / DSIZE);
-    new_bp = coalesce(ptr);     // 尝试是否有空闲的
-    ptr_size = GET_SIZE(HDRP(new_bp));
-    PUT(HDRP(new_bp), PACK(ptr_size, 1));
-    PUT(FTRP(new_bp), PACK(ptr_size, 1));
-    if (new_bp != ptr)          // 如果合并了前面的空闲块，则将 ptr 内容前移
-        memcpy(new_bp, ptr, GET_SIZE(HDRP(ptr)) - DSIZE);
-
-    if (ptr_size == asize)
-        return new_bp;
-    else if (ptr_size > asize) {
-        place(new_bp, asize);
-        return new_bp;
-    } else {
-        ptr = mm_malloc(asize);
-        if (ptr == NULL)
-            return NULL;
-        memcpy(ptr, new_bp, ptr_size - DSIZE);
-        mm_free(new_bp);
-        return ptr;
-    }
+    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
+    if (size < copySize)
+        copySize = size;
+    memcpy(newptr, oldptr, copySize);
+    mm_free(oldptr);
+    return newptr;
 }
 
 /** 用一个新的空闲块扩展堆 */
