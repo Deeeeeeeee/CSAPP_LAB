@@ -159,46 +159,46 @@ int main(int argc, char **argv)
      * Read and interpret the command line arguments 
      */
     while ((c = getopt(argc, argv, "f:t:hvVgal")) != EOF) {
-        switch (c) {
-	case 'g': /* Generate summary info for the autograder */
-	    autograder = 1;
-	    break;
-        case 'f': /* Use one specific trace file only (relative to curr dir) */
-            num_tracefiles = 1;
-            if ((tracefiles = realloc(tracefiles, 2*sizeof(char *))) == NULL)
-		unix_error("ERROR: realloc failed in main");
-	    strcpy(tracedir, "./"); 
-            tracefiles[0] = strdup(optarg);
-            tracefiles[1] = NULL;
-            break;
-	case 't': /* Directory where the traces are located */
-	    if (num_tracefiles == 1) /* ignore if -f already encountered */
-		break;
-	    strcpy(tracedir, optarg);
-	    if (tracedir[strlen(tracedir)-1] != '/') 
-		strcat(tracedir, "/"); /* path always ends with "/" */
-	    break;
-        case 'a': /* Don't check team structure */
-            team_check = 0;
-            break;
-        case 'l': /* Run libc malloc */
-            run_libc = 1;
-            break;
-        case 'v': /* Print per-trace performance breakdown */
-            verbose = 1;
-            break;
-        case 'V': /* Be more verbose than -v */
-            verbose = 2;
-            break;
-        case 'h': /* Print this message */
-	    usage();
-            exit(0);
-        default:
-	    usage();
-            exit(1);
-        }
+      switch (c) {
+      case 'g': /* Generate summary info for the autograder */
+        autograder = 1;
+        break;
+      case 'f': /* Use one specific trace file only (relative to curr dir) */
+        num_tracefiles = 1;
+        if ((tracefiles = realloc(tracefiles, 2 * sizeof(char *))) == NULL)
+          unix_error("ERROR: realloc failed in main");
+        strcpy(tracedir, "./");
+        tracefiles[0] = strdup(optarg);
+        tracefiles[1] = NULL;
+        break;
+      case 't':                  /* Directory where the traces are located */
+        if (num_tracefiles == 1) /* ignore if -f already encountered */
+          break;
+        strcpy(tracedir, optarg);
+        if (tracedir[strlen(tracedir) - 1] != '/')
+          strcat(tracedir, "/"); /* path always ends with "/" */
+        break;
+      case 'a': /* Don't check team structure */
+        team_check = 0;
+        break;
+      case 'l': /* Run libc malloc */
+        run_libc = 1;
+        break;
+      case 'v': /* Print per-trace performance breakdown */
+        verbose = 1;
+        break;
+      case 'V': /* Be more verbose than -v */
+        verbose = 2;
+        break;
+      case 'h': /* Print this message */
+        usage();
+        exit(0);
+      default:
+        usage();
+        exit(1);
+      }
     }
-	
+
     /* 
      * Check and print team info 
      */
@@ -288,23 +288,23 @@ int main(int argc, char **argv)
     mem_init(); 
 
     /* Evaluate student's mm malloc package using the K-best scheme */
-    for (i=0; i < num_tracefiles; i++) {
-	trace = read_trace(tracedir, tracefiles[i]);
-	mm_stats[i].ops = trace->num_ops;
-	if (verbose > 1)
-	    printf("Checking mm_malloc for correctness, ");
-	mm_stats[i].valid = eval_mm_valid(trace, i, &ranges);
-	if (mm_stats[i].valid) {
-	    if (verbose > 1)
-		printf("efficiency, ");
-	    mm_stats[i].util = eval_mm_util(trace, i, &ranges);
-	    speed_params.trace = trace;
-	    speed_params.ranges = ranges;
-	    if (verbose > 1)
-		printf("and performance.\n");
-	    mm_stats[i].secs = fsecs(eval_mm_speed, &speed_params);
-	}
-	free_trace(trace);
+    for (i = 0; i < num_tracefiles; i++) {
+      trace = read_trace(tracedir, tracefiles[i]);
+      mm_stats[i].ops = trace->num_ops;
+      if (verbose > 1)
+        printf("Checking mm_malloc for correctness, ");
+      mm_stats[i].valid = eval_mm_valid(trace, i, &ranges);
+      if (mm_stats[i].valid) {
+        if (verbose > 1)
+          printf("efficiency, ");
+        mm_stats[i].util = eval_mm_util(trace, i, &ranges);
+        speed_params.trace = trace;
+        speed_params.ranges = ranges;
+        if (verbose > 1)
+          printf("and performance.\n");
+        mm_stats[i].secs = fsecs(eval_mm_speed, &speed_params);
+      }
+      free_trace(trace);
     }
 
     /* Display the mm results in a compact table */

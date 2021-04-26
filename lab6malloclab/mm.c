@@ -145,6 +145,22 @@ void mm_free(void *bp)
 /*
  * mm_realloc
  */
+/** void *mm_realloc(void *ptr, size_t size) */
+/** { */
+/**     void *oldptr = ptr; */
+/**     void *newptr; */
+/**     size_t copySize; */
+/**  */
+/**     newptr = mm_malloc(size); */
+/**     if (newptr == NULL) */
+/**         return NULL; */
+/**     copySize = GET_SIZE(HDRP(oldptr)); */
+/**     if (size < copySize) */
+/**         copySize = size; */
+/**     memcpy(newptr, oldptr, copySize); */
+/**     mm_free(oldptr); */
+/**     return newptr; */
+/** } */
 void *mm_realloc(void *ptr, size_t size)
 {
     size_t asize, ptr_size;
