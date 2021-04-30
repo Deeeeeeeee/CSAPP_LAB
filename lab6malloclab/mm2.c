@@ -68,14 +68,24 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))  // 计算上一块的footer中的size
 
+/** 获得块中记录的后继和前驱地址 */
+#define PRED(bp) ((char*)(bp) + WSIZE)  // 注意，这里前驱是放在后继的后面的
+#define SUCC(bp) ((char*)(bp))
+/** 获得块的后继和前驱地址 */
+#define PRED_BLKP(bp) (GET(PRED(bp)))
+#define SUCC_BLKP(bp) (GET(SUCC(bp)))
+
 /** 私有全局变量 */
 static char *heap_listp;
 
 /** 私有函数 */
 static void *extend_heap(size_t words);
-static void *coalesce(void *bp);
+static void *imme_coalesce(void *bp);
 static void *find_fit(size_t asize);
 static void place(void *bp, size_t asize);
+static void *add_block(void *bp);
+static void *delete_block(void *bp);
+static int Index(size_t size);
 
 /* 
  * mm_init - initialize the malloc package.
@@ -83,13 +93,23 @@ static void place(void *bp, size_t asize);
 int mm_init(void)
 {
     /** 创建初始化heap，放置序言块和结尾块 */
-    if ((heap_listp = mem_sbrk(4*WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(12*WSIZE)) == (void *)-1)
         return -1;
-    PUT(heap_listp, 0);                             // 第一个字用来对齐用，因为结尾块只有一个字
-    PUT(heap_listp + (1*WSIZE), PACK(DSIZE, 1));    // 序言块header
-    PUT(heap_listp + (2*WSIZE), PACK(DSIZE, 1));    // 序言块footer
-    PUT(heap_listp + (3*WSIZE), PACK(0, 1));        // 结尾块
-    heap_listp += (2*WSIZE);
+    /** 空闲块的最小块包括头部、后继、前驱和脚部，一共4个字，16个字节 */
+    PUT(heap_listp, NULL);              //{16~31}
+    PUT(heap_listp + (1*WSIZE), NULL);  //{32~63}
+    PUT(heap_listp + (2*WSIZE), NULL);  //{64~127}
+    PUT(heap_listp + (3*WSIZE), NULL);  //{128~255}
+    PUT(heap_listp + (4*WSIZE), NULL);  //{256~511}
+    PUT(heap_listp + (5*WSIZE), NULL);  //{512~1023}
+    PUT(heap_listp + (6*WSIZE), NULL);  //{1024~2047}
+    PUT(heap_listp + (7*WSIZE), NULL);  //{2048~4095}
+    PUT(heap_listp + (8*WSIZE), NULL);  //{4096~inf}
+
+    PUT(heap_listp + (9*WSIZE), PACK(DSIZE, 1));    // 序言块header
+    PUT(heap_listp + (10*WSIZE), PACK(DSIZE, 1));   // 序言块footer
+    PUT(heap_listp + (11*WSIZE), PACK(0, 1));       // 结尾块
+    heap_listp += (10*WSIZE);
 
     /** 初始化 CHUNKSIZE 个块 */
     if (extend_heap(CHUNKSIZE/WSIZE) == NULL)
@@ -139,7 +159,7 @@ void mm_free(void *bp)
 
     PUT(HDRP(bp), PACK(size, 0));   // 首尾置成未分配
     PUT(FTRP(bp), PACK(size, 0));
-    coalesce(bp);
+    imme_coalesce(bp);
 }
 
 /*
@@ -179,11 +199,13 @@ static void *extend_heap(size_t words)
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));   // 新的结尾块
 
     /** 合并 */
-    return coalesce(bp);
+    bp = imme_coalesce(bp);
+    bp = add_block(bp);
+    return bp;
 }
 
 /** 合并操作 */
-static void *coalesce(void *bp)
+static void *imme_coalesce(void *bp)
 {
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));     // 前一个 footer 中是否分配
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));     // 后一个 header 中是否分配
@@ -195,12 +217,14 @@ static void *coalesce(void *bp)
 
     else if (prev_alloc && !next_alloc) {                   // Case 2. 后面未分配
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
+        delete_block(NEXT_BLKP(bp));
         PUT(HDRP(bp), PACK(size, 0));                       // 先给 header 写 size，下一步 FTRP 会用到
         PUT(FTRP(bp), PACK(size, 0));
     }
 
     else if (!prev_alloc && next_alloc) {                   // Case 3. 前面未分配
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+        delete_block(PREV_BLKP(bp));
         PUT(FTRP(bp), PACK(size, 0));                       // 先给 footer 写 size
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));            // 给前一个 block 的 header 写 size
         bp = PREV_BLKP(bp);                                 // 修改 bp 为前一个 block 的 bp
@@ -209,10 +233,61 @@ static void *coalesce(void *bp)
     else {                                                  // Case 4. 前后都未分配
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
             GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        delete_block(NEXT_BLKP(bp));
+        delete_block(PREV_BLKP(bp));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
+    return bp;
+}
+
+/** 插入到合适大小的空闲链中 */
+static void *add_block(void *bp)
+{
+    size_t size = GET_SIZE(HDRP(bp));
+    int index = Index(size);
+    void *root = heap_listp + index*WSIZE;
+
+    // LIFO
+    return LIFO(bp, root);
+    // AddressOrder
+    // return AddressOrder(bp, root);
+}
+
+/** 前驱块的后继指针 指向 后继块, 后继块的前驱指针 指向 前驱块 */
+static void *delete_block(void *bp)
+{
+    PUT(SUCC(PRED_BLKP(bp)), SUCC_BLKP(bp));
+    if (SUCC_BLKP(bp) != NULL)
+        PUT(PRED(SUCC_BLKP(bp)), PRED_BLKP(bp));
+}
+
+/** 确定在哪个空闲链的下标 */
+static int Index(size_t size)
+{
+    int ind = 0;
+    if (size >= 4096)
+        return 8;
+
+    size = size >> 5;
+    while (size) {
+        size = size >> 1;
+        ind++;
+    }
+    return ind;
+}
+
+static void *LIFO(void *bp, void *root)
+{
+    if (SUCC_BLKP(root) != NULL) {
+        PUT(PRED(SUCC_BLKP(root)), bp);     // SUCC -> bp
+        PUT(SUCC(bp), SUCC_BLKP(root));     // bp -> SUCC
+    } else {
+        PUT(SUCC(bp), NULL);
+    }
+    PUT(SUCC(root), bp);                    // root -> bp
+    PUT(PRED(bp), root);                    // bp -> root
     return bp;
 }
 
